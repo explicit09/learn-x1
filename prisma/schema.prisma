@@ -1,0 +1,296 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Used for direct connections to Neon database
+}
+
+// Multi-tenant architecture with organization-level isolation
+model Organization {
+  id          String    @id @default(uuid())
+  name        String
+  domain      String?   @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  users       User[]
+  courses     Course[]
+  
+  @@map("organizations")
+}
+
+// User management with role-based access control
+model User {
+  id              String        @id @default(uuid())
+  email           String        @unique
+  name            String
+  role            UserRole      @default(STUDENT)
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  enrollments     Enrollment[]
+  quizAttempts    QuizAttempt[]
+  aiInteractions  AIInteraction[]
+  professorCourses Course[]      @relation("CourseProfessor")
+  learningStyle   LearningStyle?
+  
+  @@index([organizationId])
+  @@map("users")
+}
+
+enum UserRole {
+  STUDENT
+  PROFESSOR
+  ADMIN
+}
+
+// Learning style preferences for personalization
+model LearningStyle {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id])
+  visualScore     Int       @default(5) // 1-10 scale
+  auditoryScore   Int       @default(5)
+  readingScore    Int       @default(5)
+  kinestheticScore Int      @default(5)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@map("learning_styles")
+}
+
+// Course and enrollment models
+model Course {
+  id              String        @id @default(uuid())
+  title           String
+  description     String
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+  professorId     String
+  professor       User          @relation("CourseProfessor", fields: [professorId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  enrollments     Enrollment[]
+  modules         Module[]
+  quizzes         Quiz[]
+  
+  @@index([organizationId])
+  @@index([professorId])
+  @@map("courses")
+}
+
+model Enrollment {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+// Course content organization
+model Module {
+  id          String    @id @default(uuid())
+  title       String
+  description String
+  order       Int
+  courseId    String
+  course      Course    @relation(fields: [courseId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  topics      Topic[]
+  
+  @@index([courseId])
+  @@map("modules")
+}
+
+model Topic {
+  id          String    @id @default(uuid())
+  title       String
+  description String
+  order       Int
+  moduleId    String
+  module      Module    @relation(fields: [moduleId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  materials   Material[]
+  
+  @@index([moduleId])
+  @@map("topics")
+}
+
+// Material content and vector embeddings for AI
+model Material {
+  id              String    @id @default(uuid())
+  title           String
+  description     String
+  fileUrl         String
+  fileType        FileType
+  topicId         String
+  topic           Topic     @relation(fields: [topicId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  contentChunks   ContentChunk[]
+  
+  @@index([topicId])
+  @@map("materials")
+}
+
+enum FileType {
+  PDF
+  AUDIO
+  DOCUMENT
+  VIDEO
+  IMAGE
+}
+
+// Content chunks with vector embeddings for AI retrieval
+model ContentChunk {
+  id              String    @id @default(uuid())
+  content         String
+  materialId      String
+  material        Material  @relation(fields: [materialId], references: [id])
+  // We'll handle vector embeddings in raw SQL migrations
+  // embedding vector type is not directly supported in Prisma
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([materialId])
+  @@map("content_chunks")
+}
+
+// Quiz system with spaced repetition
+model Quiz {
+  id              String        @id @default(uuid())
+  title           String
+  description     String
+  courseId        String
+  course          Course        @relation(fields: [courseId], references: [id])
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  questions       Question[]
+  quizAttempts    QuizAttempt[]
+  
+  @@index([courseId])
+  @@map("quizzes")
+}
+
+model Question {
+  id              String            @id @default(uuid())
+  content         String
+  type            QuestionType
+  quizId          String
+  quiz            Quiz              @relation(fields: [quizId], references: [id])
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  options         QuestionOption[]
+  answers         QuestionAnswer[]
+  
+  @@index([quizId])
+  @@map("questions")
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  FREE_TEXT
+  TRUE_FALSE
+}
+
+model QuestionOption {
+  id              String    @id @default(uuid())
+  content         String
+  isCorrect       Boolean
+  questionId      String
+  question        Question  @relation(fields: [questionId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([questionId])
+  @@map("question_options")
+}
+
+model QuizAttempt {
+  id              String            @id @default(uuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id])
+  quizId          String
+  quiz            Quiz              @relation(fields: [quizId], references: [id])
+  score           Float?
+  startedAt       DateTime          @default(now())
+  completedAt     DateTime?
+  answers         QuestionAnswer[]
+  
+  @@index([userId])
+  @@index([quizId])
+  @@map("quiz_attempts")
+}
+
+model QuestionAnswer {
+  id              String        @id @default(uuid())
+  content         String?
+  questionId      String
+  question        Question      @relation(fields: [questionId], references: [id])
+  quizAttemptId   String
+  quizAttempt     QuizAttempt   @relation(fields: [quizAttemptId], references: [id])
+  isCorrect       Boolean?
+  createdAt       DateTime      @default(now())
+  
+  @@index([questionId])
+  @@index([quizAttemptId])
+  @@map("question_answers")
+}
+
+// AI tutoring system interactions
+model AIInteraction {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  query           String
+  response        String
+  context         String?
+  confusionLevel  Int?      // 1-10 scale
+  createdAt       DateTime  @default(now())
+  
+  @@index([userId])
+  @@map("ai_interactions")
+}
+
+// Analytics and event logging
+model AnalyticsEvent {
+  id              String        @id @default(uuid())
+  eventType       EventType
+  userId          String?
+  courseId        String?
+  materialId      String?
+  quizId          String?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  
+  @@index([userId])
+  @@index([courseId])
+  @@index([eventType])
+  @@map("analytics_events")
+}
+
+enum EventType {
+  PAGE_VIEW
+  MATERIAL_VIEW
+  QUIZ_START
+  QUIZ_COMPLETE
+  AI_INTERACTION
+  CONFUSION_DETECTED
+  LOGIN
+  LOGOUT
+}

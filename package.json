@@ -1,0 +1,33 @@
+{
+  "name": "learn-x",
+  "version": "1.0.0",
+  "description": "LEARN-X is an AI-powered educational platform designed to provide personalized learning experiences through adaptive content delivery, interactive quizzes, and tailored explanations. This document outlines the requirements, features, and technical specifications for the LEARN-X platform.",
+  "author": "Tadies",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "list": "node scripts/dev.js list",
+    "generate": "node scripts/dev.js generate",
+    "parse-prd": "node scripts/dev.js parse-prd",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "node prisma/seed.js",
+    "db:setup": "npm run prisma:generate && npm run prisma:migrate && npm run prisma:seed"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@prisma/client": "^6.7.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "openai": "^4.86.1",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "prisma": "^6.7.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}
